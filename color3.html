@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Touch Scroll Colors</title>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background: black;
+      touch-action: manipulation;
+    }
+
+    #container {
+      transition: transform 0.65s ease;
+    }
+
+    .page {
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="container"></div>
+
+  <script>
+    const colors = [
+      "#ff2400",
+      "#fff200",
+      "#0033ed",
+      "#00ef77",
+      "#ff00cc",
+      "#00ffff",
+      "#ff8800",
+      "#8a2be2"
+    ];
+
+    const container = document.getElementById("container");
+
+    let pageIndex = 0;
+    let isMoving = false;
+
+    let lastScrollTime = 0;
+    const scrollCooldown = 300;
+
+    const pageCount = 40;
+
+    // Put pages ABOVE the screen so scrolling down reveals them
+    for (let i = pageCount - 1; i >= 0; i--) {
+      const page = document.createElement("div");
+      page.className = "page";
+      page.style.backgroundColor = colors[i % colors.length];
+      container.appendChild(page);
+    }
+
+    // Start at the bottom page
+    container.style.transform = `translateY(-${(pageCount - 1) * 100}vh)`;
+
+    function goToNextPage() {
+      const now = Date.now();
+
+      if (now - lastScrollTime < scrollCooldown) return;
+      if (isMoving) return;
+
+      lastScrollTime = now;
+      isMoving = true;
+
+      setTimeout(() => {
+        pageIndex++;
+
+        container.style.transform =
+          `translateY(-${(pageCount - 1 - pageIndex) * 100}vh)`;
+      }, 0);
+
+      setTimeout(() => {
+        isMoving = false;
+      }, 950);
+    }
+
+    document.addEventListener("touchend", goToNextPage, { passive: true });
+  </script>
+</body>
+</html>
