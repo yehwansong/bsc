@@ -26,9 +26,6 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    transform: scale(1.1);
-    transform-origin: right top;
-    filter: contrast(1.2);
   }
 </style>
 </head>
@@ -40,14 +37,13 @@
   const fps = 30;
   const scrollDuration = 650;
   const scrollCooldown = 300;
-  const BUFFER = 10; // pages ahead to keep in DOM
+  const BUFFER = 20;
 
   const container = document.getElementById("container");
-  let pageIndex = 0;
+  let localIndex = 0;
   let isMoving = false;
   let lastScrollTime = 0;
   let animationId = null;
-  let domPages = []; // all current DOM page elements
 
   function framePath(n) { return `fork_img/IMG_${n}.png`; }
 
@@ -55,27 +51,20 @@
     const p = new Image(); p.src = framePath(i);
   }
 
-  function makePage() {
-    const page = document.createElement("div");
-    page.className = "page";
-    const img = document.createElement("img");
-    img.src = framePath(firstFrame);
-    page.appendChild(img);
-    return page;
-  }
-
-  // seed initial BUFFER pages stacked above, same as reference
   function buildStack() {
     container.innerHTML = "";
-    domPages = [];
-    for (let i = BUFFER - 1; i >= 0; i--) {
-      const page = makePage();
-      container.appendChild(page);
-      domPages.push(page);
-    }
-    // domPages[0] = topmost in DOM = furthest ahead
-    // domPages[BUFFER-1] = bottom = current visible
     container.style.transition = "none";
+    localIndex = 0;
+
+    for (let i = BUFFER - 1; i >= 0; i--) {
+      const page = document.createElement("div");
+      page.className = "page";
+      const img = document.createElement("img");
+      img.src = framePath(firstFrame);
+      page.appendChild(img);
+      container.appendChild(page);
+    }
+
     container.style.transform = `translateY(-${(BUFFER - 1) * 100}vh)`;
   }
 
@@ -85,8 +74,11 @@
     if (animationId !== null) { clearInterval(animationId); animationId = null; }
   }
 
-  function playImg(img) {
+  function playVisible() {
     stopAnimation();
+    const pages = container.querySelectorAll(".page");
+    const img = pages[BUFFER - 1 - localIndex]?.querySelector("img");
+    if (!img) return;
     let frame = firstFrame;
     img.src = framePath(frame);
     animationId = setInterval(() => {
@@ -100,22 +92,12 @@
     }, 1000 / fps);
   }
 
-  function getVisibleImg() {
-    // visible page is always domPages[BUFFER - 1 - localIndex]
-    // but we reset localIndex to 0 after each rebuild
-    return domPages[0]?.querySelector("img");
-  }
-
-  // local index within current DOM stack (0 = current visible bottom)
-  let localIndex = 0;
-
   function nextPage() {
     const now = Date.now();
     if (now - lastScrollTime < scrollCooldown) return;
     if (isMoving) return;
     lastScrollTime = now;
     isMoving = true;
-    pageIndex++;
     localIndex++;
 
     container.style.transition = "transform 0.65s ease";
@@ -123,32 +105,11 @@
 
     setTimeout(() => {
       isMoving = false;
+      playVisible();
 
-      // play the newly visible page
-      const visibleIdx = BUFFER - 1 - localIndex;
-      const img = domPages[visibleIdx]?.querySelector("img");
-      if (img) playImg(img);
-
-      // if we're getting close to the top, rebuild the stack silently
+      // silently rebuild when halfway through buffer
       if (localIndex >= BUFFER - 2) {
-        // after transition done, silently reset without any visual jump
-        container.style.transition = "none";
-
-        // rebuild: add new pages on top, drop used ones from bottom
-        // easiest: rebuild whole stack and snap to correct position
-        const newPages = [];
-        for (let i = BUFFER - 1; i >= 0; i--) {
-          const page = makePage();
-          newPages.push(page);
-        }
-        container.innerHTML = "";
-        // stack in reverse so index 0 = topmost ahead
-        for (let i = newPages.length - 1; i >= 0; i--) {
-          container.appendChild(newPages[i]);
-        }
-        domPages = newPages;
-        localIndex = 0;
-        container.style.transform = `translateY(-${(BUFFER - 1) * 100}vh)`;
+        buildStack();
       }
     }, scrollDuration);
   }
@@ -157,10 +118,7 @@
   document.addEventListener("wheel",    nextPage, { passive: true });
   document.addEventListener("click",    nextPage);
 
-  window.addEventListener("load", () => {
-    const img = domPages[BUFFER - 1]?.querySelector("img");
-    if (img) playImg(img);
-  });
+  window.addEventListener("load", playVisible);
 </script>
 </body>
 </html>
