@@ -3,39 +3,125 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Color Touch Flash</title>
+  <title>Image Sequence Touch</title>
   <style>
-    body { margin: 0; height: 100vh; background-color: black; }
-    body.class-0 { background-color: #ff2400; }
-    body.class-1 { background-color: #fff200; }
-    body.class-2 { background-color: #0033ed; }
-    body.class-3 { background-color: #00ef77; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: red; height: 100vh; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
   </style>
 </head>
 <body>
+<canvas id="c"></canvas>
 <script>
-let cycleTimer = null;
-let stopTimer = null;
-let colorIndex = 0;
+  const FIRST = 650600;
+  const LAST  = 650624;
+  const TOTAL = LAST - FIRST + 1; // 44
+  const FWD_FPS = 10;
+  const REV_FPS = 90;
+  const FADE_IN_MS  = 200;
+  const FADE_OUT_MS = (TOTAL / REV_FPS) * 1000; // match reverse duration
 
-document.addEventListener("touchstart", () => {
-  // Clear any existing timers
-  if (cycleTimer) clearInterval(cycleTimer);
-  if (stopTimer) clearTimeout(stopTimer);
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
 
-  // Start slower color cycling (3x longer)
-  cycleTimer = setInterval(() => {
-    document.body.className = "class-" + (colorIndex % 4);
-    colorIndex++;
-  }, 300);
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    render();
+  }
+  window.addEventListener('resize', resize);
 
-  // Stop after 1.5 seconds and go back to black
-  stopTimer = setTimeout(() => {
-    clearInterval(cycleTimer);
-    cycleTimer = null;
-    document.body.className = "";
-  }, 1500);
-});
+  const frames = new Array(TOTAL);
+  let loaded = 0;
+  let ready = false;
+
+  for (let i = 0; i < TOTAL; i++) {
+    const img = new Image();
+    img.src = `weight_img/IMG_${FIRST + i}.png`;
+    img.onload = img.onerror = () => {
+      if (++loaded === TOTAL) { ready = true; render(); }
+    };
+    frames[i] = img;
+  }
+
+  let frameIndex = 0;
+  let alpha = 0;          // 0 = fully black, 1 = fully visible
+  let seqTimer = null;
+  let fadeRAF = null;
+  let holding = false;
+
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (alpha > 0 && ready) {
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(frames[frameIndex], 0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1;
+    }
+    // black is just the body background showing through
+  }
+
+  function stopSeq() {
+    if (seqTimer) { clearInterval(seqTimer); seqTimer = null; }
+  }
+
+  function stopFade() {
+    if (fadeRAF) { cancelAnimationFrame(fadeRAF); fadeRAF = null; }
+  }
+
+  function fadeTo(target, durationMs, onDone) {
+    stopFade();
+    const start = performance.now();
+    const from = alpha;
+    function step(now) {
+      const t = Math.min((now - start) / durationMs, 1);
+      alpha = from + (target - from) * t;
+      render();
+      if (t < 1) { fadeRAF = requestAnimationFrame(step); }
+      else { alpha = target; render(); if (onDone) onDone(); }
+    }
+    fadeRAF = requestAnimationFrame(step);
+  }
+
+  function onDown() {
+    if (holding) return;
+    holding = true;
+
+    stopSeq();
+    stopFade();
+    frameIndex = 0;
+    render();
+
+    // fade in
+    fadeTo(1, FADE_IN_MS);
+
+    // play forward sequence
+    seqTimer = setInterval(() => {
+      if (frameIndex < TOTAL - 1) { frameIndex++; render(); }
+      else stopSeq(); // hold last frame, keep showing until touch end
+    }, 1000 / FWD_FPS);
+  }
+
+  function onUp() {
+    if (!holding) return;
+    holding = false;
+
+    stopSeq();
+
+    // play backward + fade out simultaneously
+    seqTimer = setInterval(() => {
+      if (frameIndex > 0) { frameIndex--; render(); }
+      else { stopSeq(); }
+    }, 1000 / REV_FPS);
+
+    fadeTo(0, FADE_OUT_MS);
+  }
+
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  document.addEventListener('touchstart',  e => { e.preventDefault(); onDown(); }, { passive: false });
+  document.addEventListener('touchend',    e => { e.preventDefault(); onUp();   }, { passive: false });
+  document.addEventListener('touchcancel', e => { e.preventDefault(); onUp();   }, { passive: false });
 </script>
 </body>
 </html>

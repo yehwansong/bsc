@@ -1,89 +1,166 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Touch Scroll Colors</title>
-
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
-      background: black;
-      touch-action: manipulation;
-    }
-
-    #container {
-      transition: transform 0.65s ease;
-    }
-
-    .page {
-      width: 100vw;
-      height: 100vh;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scrolling Image Sequence</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: black;
+    touch-action: manipulation;
+  }
+  #container {
+    transition: transform 0.65s ease;
+  }
+  .page {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: black;
+  }
+  .page img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transform: scale(1.1);
+    transform-origin: right top;
+    filter: contrast(1.2);
+  }
+</style>
 </head>
-
 <body>
   <div id="container"></div>
+<script>
+  const firstFrame = 650405;
+  const lastFrame  = 650423;
+  const fps = 30;
+  const scrollDuration = 650;
+  const scrollCooldown = 300;
+  const BUFFER = 10; // pages ahead to keep in DOM
 
-  <script>
-    const colors = [
-      "#ff2400",
-      "#fff200",
-      "#0033ed",
-      "#00ef77",
-      "#ff00cc",
-      "#00ffff",
-      "#ff8800",
-      "#8a2be2"
-    ];
+  const container = document.getElementById("container");
+  let pageIndex = 0;
+  let isMoving = false;
+  let lastScrollTime = 0;
+  let animationId = null;
+  let domPages = []; // all current DOM page elements
 
-    const container = document.getElementById("container");
+  function framePath(n) { return `fork_img/IMG_${n}.png`; }
 
-    let pageIndex = 0;
-    let isMoving = false;
+  for (let i = firstFrame; i <= lastFrame; i++) {
+    const p = new Image(); p.src = framePath(i);
+  }
 
-    let lastScrollTime = 0;
-    const scrollCooldown = 300;
+  function makePage() {
+    const page = document.createElement("div");
+    page.className = "page";
+    const img = document.createElement("img");
+    img.src = framePath(firstFrame);
+    page.appendChild(img);
+    return page;
+  }
 
-    const pageCount = 40;
-
-    // Put pages ABOVE the screen so scrolling down reveals them
-    for (let i = pageCount - 1; i >= 0; i--) {
-      const page = document.createElement("div");
-      page.className = "page";
-      page.style.backgroundColor = colors[i % colors.length];
+  // seed initial BUFFER pages stacked above, same as reference
+  function buildStack() {
+    container.innerHTML = "";
+    domPages = [];
+    for (let i = BUFFER - 1; i >= 0; i--) {
+      const page = makePage();
       container.appendChild(page);
+      domPages.push(page);
     }
+    // domPages[0] = topmost in DOM = furthest ahead
+    // domPages[BUFFER-1] = bottom = current visible
+    container.style.transition = "none";
+    container.style.transform = `translateY(-${(BUFFER - 1) * 100}vh)`;
+  }
 
-    // Start at the bottom page
-    container.style.transform = `translateY(-${(pageCount - 1) * 100}vh)`;
+  buildStack();
 
-    function goToNextPage() {
-      const now = Date.now();
+  function stopAnimation() {
+    if (animationId !== null) { clearInterval(animationId); animationId = null; }
+  }
 
-      if (now - lastScrollTime < scrollCooldown) return;
-      if (isMoving) return;
+  function playImg(img) {
+    stopAnimation();
+    let frame = firstFrame;
+    img.src = framePath(frame);
+    animationId = setInterval(() => {
+      frame++;
+      if (frame > lastFrame) {
+        img.src = framePath(lastFrame);
+        stopAnimation();
+        return;
+      }
+      img.src = framePath(frame);
+    }, 1000 / fps);
+  }
 
-      lastScrollTime = now;
-      isMoving = true;
+  function getVisibleImg() {
+    // visible page is always domPages[BUFFER - 1 - localIndex]
+    // but we reset localIndex to 0 after each rebuild
+    return domPages[0]?.querySelector("img");
+  }
 
-      setTimeout(() => {
-        pageIndex++;
+  // local index within current DOM stack (0 = current visible bottom)
+  let localIndex = 0;
 
-        container.style.transform =
-          `translateY(-${(pageCount - 1 - pageIndex) * 100}vh)`;
-      }, 0);
+  function nextPage() {
+    const now = Date.now();
+    if (now - lastScrollTime < scrollCooldown) return;
+    if (isMoving) return;
+    lastScrollTime = now;
+    isMoving = true;
+    pageIndex++;
+    localIndex++;
 
-      setTimeout(() => {
-        isMoving = false;
-      }, 950);
-    }
+    container.style.transition = "transform 0.65s ease";
+    container.style.transform = `translateY(-${(BUFFER - 1 - localIndex) * 100}vh)`;
 
-    document.addEventListener("touchend", goToNextPage, { passive: true });
-  </script>
+    setTimeout(() => {
+      isMoving = false;
+
+      // play the newly visible page
+      const visibleIdx = BUFFER - 1 - localIndex;
+      const img = domPages[visibleIdx]?.querySelector("img");
+      if (img) playImg(img);
+
+      // if we're getting close to the top, rebuild the stack silently
+      if (localIndex >= BUFFER - 2) {
+        // after transition done, silently reset without any visual jump
+        container.style.transition = "none";
+
+        // rebuild: add new pages on top, drop used ones from bottom
+        // easiest: rebuild whole stack and snap to correct position
+        const newPages = [];
+        for (let i = BUFFER - 1; i >= 0; i--) {
+          const page = makePage();
+          newPages.push(page);
+        }
+        container.innerHTML = "";
+        // stack in reverse so index 0 = topmost ahead
+        for (let i = newPages.length - 1; i >= 0; i--) {
+          container.appendChild(newPages[i]);
+        }
+        domPages = newPages;
+        localIndex = 0;
+        container.style.transform = `translateY(-${(BUFFER - 1) * 100}vh)`;
+      }
+    }, scrollDuration);
+  }
+
+  document.addEventListener("touchend", nextPage, { passive: true });
+  document.addEventListener("wheel",    nextPage, { passive: true });
+  document.addEventListener("click",    nextPage);
+
+  window.addEventListener("load", () => {
+    const img = domPages[BUFFER - 1]?.querySelector("img");
+    if (img) playImg(img);
+  });
+</script>
 </body>
 </html>
