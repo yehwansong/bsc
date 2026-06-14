@@ -39,24 +39,19 @@
   const scrollDuration = 650;
   const scrollCooldown = 300;
   const BUFFER = 20;
-
   const container = document.getElementById("container");
   let localIndex = 0;
   let isMoving = false;
   let lastScrollTime = 0;
   let animationId = null;
-
   function framePath(n) { return `fork_img/IMG_${n}.png`; }
-
   for (let i = firstFrame; i <= lastFrame; i++) {
     const p = new Image(); p.src = framePath(i);
   }
-
   function buildStack() {
     container.innerHTML = "";
     container.style.transition = "none";
     localIndex = 0;
-
     for (let i = BUFFER - 1; i >= 0; i--) {
       const page = document.createElement("div");
       page.className = "page";
@@ -65,16 +60,12 @@
       page.appendChild(img);
       container.appendChild(page);
     }
-
     container.style.transform = `translateY(-${(BUFFER - 1) * 100}vh)`;
   }
-
   buildStack();
-
   function stopAnimation() {
     if (animationId !== null) { clearInterval(animationId); animationId = null; }
   }
-
   function playVisible() {
     stopAnimation();
     const pages = container.querySelectorAll(".page");
@@ -92,7 +83,6 @@
       img.src = framePath(frame);
     }, 1000 / fps);
   }
-
   function nextPage() {
     const now = Date.now();
     if (now - lastScrollTime < scrollCooldown) return;
@@ -100,25 +90,27 @@
     lastScrollTime = now;
     isMoving = true;
     localIndex++;
-
     container.style.transition = "transform 0.65s ease";
     container.style.transform = `translateY(-${(BUFFER - 1 - localIndex) * 100}vh)`;
-
+    // start the frame playback partway through the slide so it's already
+    // animating by the time the new page settles into place
+    setTimeout(() => {
+      playVisible();
+    }, scrollDuration * 0.35);
     setTimeout(() => {
       isMoving = false;
-      playVisible();
-
-      // silently rebuild when halfway through buffer
+      // silently rebuild when halfway through buffer, then immediately
+      // start playback on the freshly-visible page so scrolling never
+      // "stalls" on a frozen frame
       if (localIndex >= BUFFER - 2) {
         buildStack();
+        playVisible();
       }
     }, scrollDuration);
   }
-
   document.addEventListener("touchend", nextPage, { passive: true });
   document.addEventListener("wheel",    nextPage, { passive: true });
   document.addEventListener("click",    nextPage);
-
   window.addEventListener("load", playVisible);
 </script>
 </body>
