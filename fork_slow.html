@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scrolling Image Sequence</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: black;
+    touch-action: manipulation;
+  }
+  #container {
+    transition: transform 0.65s ease;
+  }
+  .page {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: black;
+  }
+  .page img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    filter: contrast(1.2) saturate(1.2);
+  }
+</style>
+</head>
+<body>
+  <div id="container"></div>
+<script>
+  const firstFrame = 650405;
+  const lastFrame  = 650423;
+  const fps = 30;
+  const scrollDuration = 650;
+  const scrollCooldown = 300;
+  const BUFFER = 20;
+  const container = document.getElementById("container");
+  let localIndex = 0;
+  let isMoving = false;
+  let lastScrollTime = 0;
+  let animationId = null;
+  function framePath(n) { return `fork_img/IMG_${n}.png`; }
+  for (let i = firstFrame; i <= lastFrame; i++) {
+    const p = new Image(); p.src = framePath(i);
+  }
+  function buildStack() {
+    container.innerHTML = "";
+    container.style.transition = "none";
+    localIndex = 0;
+    for (let i = BUFFER - 1; i >= 0; i--) {
+      const page = document.createElement("div");
+      page.className = "page";
+      const img = document.createElement("img");
+      img.src = framePath(firstFrame);
+      page.appendChild(img);
+      container.appendChild(page);
+    }
+    container.style.transform = `translateY(-${(BUFFER - 1) * 100}vh)`;
+  }
+  buildStack();
+  function stopAnimation() {
+    if (animationId !== null) { clearInterval(animationId); animationId = null; }
+  }
+  function playVisible() {
+    stopAnimation();
+    const pages = container.querySelectorAll(".page");
+    const img = pages[BUFFER - 1 - localIndex]?.querySelector("img");
+    if (!img) return;
+    let frame = firstFrame;
+    img.src = framePath(frame);
+    animationId = setInterval(() => {
+      frame++;
+      if (frame > lastFrame) {
+        img.src = framePath(lastFrame);
+        stopAnimation();
+        return;
+      }
+      img.src = framePath(frame);
+    }, 1000 / fps);
+  }
+  function nextPage() {
+    const now = Date.now();
+    if (now - lastScrollTime < scrollCooldown) return;
+    if (isMoving) return;
+    lastScrollTime = now;
+    isMoving = true;
+    localIndex++;
+    container.style.transition = "transform 0.65s ease";
+    container.style.transform = `translateY(-${(BUFFER - 1 - localIndex) * 100}vh)`;
+    // start the frame playback partway through the slide so it's already
+    // animating by the time the new page settles into place
+    setTimeout(() => {
+      playVisible();
+    }, scrollDuration * 0.35);
+    setTimeout(() => {
+      isMoving = false;
+      // silently rebuild when halfway through buffer, then immediately
+      // start playback on the freshly-visible page so scrolling never
+      // "stalls" on a frozen frame
+      if (localIndex >= BUFFER - 2) {
+        buildStack();
+        playVisible();
+      }
+    }, scrollDuration);
+  }
+  document.addEventListener("touchend", nextPage, { passive: true });
+  document.addEventListener("wheel",    nextPage, { passive: true });
+  document.addEventListener("click",    nextPage);
+  window.addEventListener("load", playVisible);
+</script>
+</body>
+</html>
