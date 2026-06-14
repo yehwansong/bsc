@@ -45,8 +45,13 @@
   let lastScrollTime = 0;
   let animationId = null;
   function framePath(n) { return `fork_img/IMG_${n}.png`; }
+  // keep references so decoded frames stay in memory and don't need
+  // re-fetching/re-decoding mid-playback on memory-constrained devices
+  const preloaded = [];
   for (let i = firstFrame; i <= lastFrame; i++) {
-    const p = new Image(); p.src = framePath(i);
+    const p = new Image();
+    p.src = framePath(i);
+    preloaded.push(p);
   }
   function buildStack() {
     container.innerHTML = "";
@@ -96,7 +101,7 @@
     // animating by the time the new page settles into place
     setTimeout(() => {
       playVisible();
-    }, scrollDuration * 0.35);
+    }, scrollDuration * 0.5);
     setTimeout(() => {
       isMoving = false;
       // silently rebuild when halfway through buffer, then immediately
