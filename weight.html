@@ -37,7 +37,7 @@
 
   for (let i = 0; i < TOTAL; i++) {
     const img = new Image();
-    img.src = `weight_img/IMG_${FIRST + i}.png`;
+    img.src = `weight_img/IMG_${FIRST + i}.webp`;
     img.onload = img.onerror = () => {
       if (++loaded === TOTAL) { ready = true; render(); }
     };
