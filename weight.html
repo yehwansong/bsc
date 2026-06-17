@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
   <title>Image Sequence Touch</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: red; height: 100vh; overflow: hidden; }
-    canvas { display: block; width: 100vw; height: 100vh; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: red; }
+    * { box-sizing: border-box; }
+    canvas { display: block; position: fixed; top: 0; left: 0; width: 100%; height: 100%; touch-action: none; }
   </style>
 </head>
 <body>
@@ -15,26 +15,22 @@
 <script>
   const FIRST = 650600;
   const LAST  = 650624;
-  const TOTAL = LAST - FIRST + 1; // 44
+  const TOTAL = LAST - FIRST + 1;
   const FWD_FPS = 10;
   const REV_FPS = 90;
   const FADE_IN_MS  = 200;
-  const FADE_OUT_MS = (TOTAL / REV_FPS) * 1000; // match reverse duration
-
+  const FADE_OUT_MS = (TOTAL / REV_FPS) * 1000;
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
-
   function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     render();
   }
   window.addEventListener('resize', resize);
-
   const frames = new Array(TOTAL);
   let loaded = 0;
   let ready = false;
-
   for (let i = 0; i < TOTAL; i++) {
     const img = new Image();
     img.src = `weight_img/IMG_${FIRST + i}.webp`;
@@ -43,13 +39,11 @@
     };
     frames[i] = img;
   }
-
   let frameIndex = 0;
-  let alpha = 0;          // 0 = fully black, 1 = fully visible
+  let alpha = 0;
   let seqTimer = null;
   let fadeRAF = null;
   let holding = false;
-
   function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (alpha > 0 && ready) {
@@ -57,17 +51,13 @@
       ctx.drawImage(frames[frameIndex], 0, 0, canvas.width, canvas.height);
       ctx.globalAlpha = 1;
     }
-    // black is just the body background showing through
   }
-
   function stopSeq() {
     if (seqTimer) { clearInterval(seqTimer); seqTimer = null; }
   }
-
   function stopFade() {
     if (fadeRAF) { cancelAnimationFrame(fadeRAF); fadeRAF = null; }
   }
-
   function fadeTo(target, durationMs, onDone) {
     stopFade();
     const start = performance.now();
@@ -81,44 +71,31 @@
     }
     fadeRAF = requestAnimationFrame(step);
   }
-
   function onDown() {
     if (holding) return;
     holding = true;
-
     stopSeq();
     stopFade();
     frameIndex = 0;
     render();
-
-    // fade in
     fadeTo(1, FADE_IN_MS);
-
-    // play forward sequence
     seqTimer = setInterval(() => {
       if (frameIndex < TOTAL - 1) { frameIndex++; render(); }
-      else stopSeq(); // hold last frame, keep showing until touch end
+      else stopSeq();
     }, 1000 / FWD_FPS);
   }
-
   function onUp() {
     if (!holding) return;
     holding = false;
-
     stopSeq();
-
-    // play backward + fade out simultaneously
     seqTimer = setInterval(() => {
       if (frameIndex > 0) { frameIndex--; render(); }
       else { stopSeq(); }
     }, 1000 / REV_FPS);
-
     fadeTo(0, FADE_OUT_MS);
   }
-
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-
   document.addEventListener('touchstart',  e => { e.preventDefault(); onDown(); }, { passive: false });
   document.addEventListener('touchend',    e => { e.preventDefault(); onUp();   }, { passive: false });
   document.addEventListener('touchcancel', e => { e.preventDefault(); onUp();   }, { passive: false });
