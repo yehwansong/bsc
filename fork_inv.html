@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scrolling Image Sequence</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: black;
+    touch-action: manipulation;
+  }
+  #container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+  }
+  .page {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: black;
+    will-change: transform;
+  }
+  .page img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    filter: contrast(1.2) saturate(1.2);
+  }
+</style>
+</head>
+<body>
+  <div id="container"></div>
+<script>
+  const firstFrame = 650405;
+  const lastFrame  = 650423;
+  const fps = 30;
+  const scrollDuration = 650;
+  const scrollCooldown = 300;
+  const container = document.getElementById("container");
+
+  // Preload all frames into Image objects so they stay decoded in memory
+  const frames = [];
+  for (let i = firstFrame; i <= lastFrame; i++) {
+    const img = new Image();
+    img.src = `fork_img/IMG_${i}.webp`;
+    frames.push(img);
+  }
+
+  // Two pages: current (slot 0) and next (slot 1), swapped on each advance
+  const pages = [makePage(), makePage()];
+  pages[0].style.transform = "translateY(0)";
+  pages[1].style.transform = "translateY(100vh)";
+  container.appendChild(pages[0]);
+  container.appendChild(pages[1]);
+
+  function makePage() {
+    const div = document.createElement("div");
+    div.className = "page";
+    const img = document.createElement("img");
+    img.src = frames[0].src;
+    div.appendChild(img);
+    return div;
+  }
+
+  let currentSlot = 0;
+  let isMoving = false;
+  let lastScrollTime = 0;
+  let animationId = null;
+
+  function stopAnimation() {
+    if (animationId !== null) { clearInterval(animationId); animationId = null; }
+  }
+
+  function playOnSlot(slot) {
+    stopAnimation();
+    const img = pages[slot].querySelector("img");
+    let frameIdx = 0;
+    img.src = frames[frameIdx].src;
+    animationId = setInterval(() => {
+      frameIdx++;
+      if (frameIdx >= frames.length) {
+        stopAnimation();
+        return;
+      }
+      img.src = frames[frameIdx].src;
+    }, 1000 / fps);
+  }
+
+  function nextPage() {
+    const now = Date.now();
+    if (now - lastScrollTime < scrollCooldown) return;
+    if (isMoving) return;
+    lastScrollTime = now;
+    isMoving = true;
+
+    const nextSlot = 1 - currentSlot;
+
+    // Position next page just below, no transition yet
+    pages[nextSlot].style.transition = "none";
+    pages[nextSlot].style.transform = "translateY(100vh)";
+
+    // Start animating next page before it slides in — no blink
+    playOnSlot(nextSlot);
+
+    // Slide both pages simultaneously
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        pages[currentSlot].style.transition = `transform ${scrollDuration}ms ease`;
+        pages[nextSlot].style.transition    = `transform ${scrollDuration}ms ease`;
+        pages[currentSlot].style.transform  = "translateY(-100vh)";
+        pages[nextSlot].style.transform     = "translateY(0)";
+      });
+    });
+
+    setTimeout(() => {
+      pages[currentSlot].style.transition = "none";
+      pages[currentSlot].style.transform  = "translateY(100vh)";
+      currentSlot = nextSlot;
+      isMoving = false;
+    }, scrollDuration);
+  }
+
+  document.addEventListener("touchend", nextPage, { passive: true });
+  document.addEventListener("wheel",    nextPage, { passive: true });
+  document.addEventListener("click",    nextPage);
+  window.addEventListener("load", () => playOnSlot(currentSlot));
+</script>
+</body>
+</html>
